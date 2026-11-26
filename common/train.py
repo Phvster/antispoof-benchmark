@@ -8,7 +8,9 @@ Quy ước cố định (CONVENTIONS.md, mục "Huấn luyện") — là hằng 
 Khác clovaai/aasist main.py (cố ý): không SWA, không chấm eval trong lúc train.
 
 Resume: mỗi epoch ghi last.pt (model, optimizer, scheduler, RNG, generator, lịch sử log).
-`--resume auto` nạp last.pt nếu có. `--max_minutes` dừng sạch trước khi hết phiên Kaggle
+`--resume auto` nạp last.pt nếu có. `--max_minutes` dừng sạch trước khi hết phiên Kaggle;
+`--stop_after_epochs N` (chạy thử) tạm dừng sau N epoch của phiên này — không đổi MAX_EPOCHS,
+nên lịch cosine và kết quả giống hệt chạy liền.
 (trạng thái "paused" trong run_status.json), chạy lại cùng lệnh để đi tiếp.
 
 Ví dụ:
@@ -157,6 +159,8 @@ def parse_args(argv=None):
     ap.add_argument("--seed", type=int, required=True)
     ap.add_argument("--out_dir", required=True)
     ap.add_argument("--resume", choices=["auto", "none"], default="auto")
+    ap.add_argument("--stop_after_epochs", type=int, default=None,
+                    help="chạy thử: tạm dừng (paused) sau N epoch của phiên này; resume đi tiếp bình thường")
     ap.add_argument("--max_minutes", type=float, default=None,
                     help="ngân sách thời gian của phiên này; không bắt đầu epoch mới nếu không kịp")
     for k in DATA_KEYS:
@@ -301,6 +305,9 @@ def main(argv=None) -> dict:
         if bad_epochs >= PATIENCE:
             print(f"[early stop] {PATIENCE} epoch dev EER không giảm.")
             return status("early_stopped", epoch)
+        if args.stop_after_epochs is not None and epoch - start_epoch + 1 >= args.stop_after_epochs                 and epoch + 1 < MAX_EPOCHS:
+            print(f"[pause] đã chạy {args.stop_after_epochs} epoch trong phiên này (--stop_after_epochs).")
+            return status("paused", epoch)
     return status("finished", epoch)
 
 

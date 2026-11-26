@@ -152,3 +152,16 @@ def test_high_score_means_bonafide_end_to_end(setup):
     assert scores[labels == 1].min() > scores[labels == 0].max()
     eer, _ = eer_from_labels(scores, labels)
     assert eer == 0.0
+
+
+def test_stop_after_epochs_then_resume_matches(setup, monkeypatch):
+    """--stop_after_epochs 1 hai lần liên tiếp == chạy liền 2 epoch (không đổi lịch cosine)."""
+    monkeypatch.setattr(train_mod, "MAX_EPOCHS", 2)
+    a = setup["tmp"] / "run_cont_sae"
+    b = setup["tmp"] / "run_sae"
+    run(setup, a)
+    st1 = run(setup, b, "--stop_after_epochs", "1")
+    assert st1["state"] == "paused" and st1["last_epoch"] == 0
+    st2 = run(setup, b, "--stop_after_epochs", "1")
+    assert st2["state"] == "finished" and st2["last_epoch"] == 1
+    assert read_log(a / "log.csv") == read_log(b / "log.csv")
