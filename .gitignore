@@ -1,0 +1,19 @@
+# môi trường
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# audio / dữ liệu / checkpoint (không commit)
+*.flac
+*.wav
+*.npy
+*.pt
+*.pth
+*.pt.tmp
+runs/
+/kaggle/working/
+data/
+
+# Claude Code — cấu hình cá nhân
+.claude/settings.local.json
