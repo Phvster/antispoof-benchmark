@@ -1,0 +1,7 @@
+# torch KHÔNG nằm ở đây: Kaggle đã có sẵn torch GPU; local cài bản CPU theo README.
+numpy
+scipy
+soundfile
+pandas
+pyyaml
+pytest
