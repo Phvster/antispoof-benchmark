@@ -1,0 +1,27 @@
+# AASIST-L — hyperparam copy từ clovaai/aasist config/AASIST-L.conf
+# (commit a04c9863f63d44471dde8a6abcb3b082b07cd1d1). Số tham số: 85.306.
+# Quy ước chung (CE [0.1, 0.9], 100 epoch, patience 10, chọn theo dev EER) là hằng số trong
+# common/train.py, KHÔNG đặt ở đây. Đường dẫn dữ liệu truyền qua CLI.
+model:
+  name: aasist_l
+  class: models.aasist_l.model:AASISTL
+  args:
+    first_conv: 128         # nb_samp lấy từ common.audio.NB_SAMP (model gốc không dùng nb_samp)
+    filts: [70, [1, 32], [32, 32], [32, 24], [24, 24]]
+    gat_dims: [24, 32]
+    pool_ratios: [0.4, 0.5, 0.7, 0.5]
+    temperatures: [2.0, 2.0, 100.0, 100.0]
+    freq_aug: false         # .conf gốc không bật freq_aug
+
+train:
+  batch_size: 24
+  num_workers: 2
+
+optim:
+  optimizer: adam
+  base_lr: 1.0e-4
+  lr_min: 5.0e-6
+  betas: [0.9, 0.999]
+  weight_decay: 1.0e-4
+  amsgrad: false
+  scheduler: cosine         # theo step, tổng = MAX_EPOCHS * steps_per_epoch (như clovaai)

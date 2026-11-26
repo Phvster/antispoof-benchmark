@@ -41,6 +41,7 @@ Nếu file này khác tài liệu đó → tài liệu thắng; cập nhật l�
 - Chỉ dùng script chấm chung (dựa trên evaluation của clovaai/aasist): EER ở `common/metrics.py`, chấm file điểm + min t-DCF ở `eval/score.py` (theo tài liệu; repo `Phvster/antispoof-benchmark`).
 - Bắt buộc: EER toàn tập; min t-DCF (2019 LA, dùng điểm ASV của BTC); EER theo từng kiểu tấn công; FPR giọng thật tại ngưỡng EER của dev.
 - Ngưỡng vận hành = điểm EER trên dev, áp nguyên sang test.
+- Mỗi model đăng ký tên trong `models/__init__.py::REGISTRY`; `tests/test_models_registry.py` kiểm tra giao diện cho mọi model.
 - Model: `logits(x)` cột 0 = giả, cột 1 = thật; `score = logit[:,1] - logit[:,0]` (cao = thật). AASIST/clovaai đã cùng nhãn → không đảo cột.
 - Kiểm chứng pipeline bằng pretrained clovaai ở **chế độ cửa sổ**: AASIST-L ≈ EER 0,99% / min t-DCF 0,0309; AASIST ≈ 0,83% / 0,0275.
 

@@ -29,6 +29,8 @@ python -m pytest -q
 | `tools/decode_to_npy.py` | giải mã FLAC -> .npy int16 một lần (đọc nhanh hơn khi train) | A + B |
 | `eval/score.py` | chấm file điểm, min t-DCF (B phụ trách) | A + B |
 | `models/<tên>/` | `model.py` + `config.yaml` | từng người |
+| `models/aasist_l/` | AASIST-L port từ clovaai/aasist (85.306 tham số) | A |
+| `kaggle/` | notebook Kaggle + hướng dẫn chạy/resume | từng người |
 
 ## Giao diện model
 
@@ -36,7 +38,9 @@ Mỗi model là một `nn.Module` có:
 - `logits(wave[B, T]) -> [B, 2]`: cột 0 = giả, cột 1 = thật (nhãn chung: 1 = thật, 0 = giả, giống clovaai);
 - `forward(wave[B, T]) -> score[B] = logits[:,1] - logits[:,0]` (cao = thật).
 
-Config model khai báo `model.class: "models.<tên>.model:<Class>"` và `model.args`.
+Config model khai báo `model.name` (tra `models/__init__.py::REGISTRY`) hoặc ghi rõ
+`model.class: "models.<tên>.model:<Class>"`, cùng `model.args`. Model mới phải thêm vào `REGISTRY`;
+`tests/test_models_registry.py` kiểm tra giao diện cho mọi model.
 
 ## Luồng chạy
 

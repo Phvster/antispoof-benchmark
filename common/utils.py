@@ -35,17 +35,24 @@ def save_yaml(obj: dict, path: str) -> None:
 
 
 def build_model(model_cfg: dict) -> torch.nn.Module:
-    """model_cfg = {"name": ..., "class": "pkg.module:Class", "args": {...}}.
+    """model_cfg = {"name": ..., "class": "pkg.module:Class" (tùy chọn), "args": {...}}.
+    Thiếu "class" -> tra models.REGISTRY theo "name".
 
     Model phải có:
       logits(wave[B,T]) -> [B,2], cột 0 = giả, cột 1 = thật (nhãn chung, giống clovaai);
       forward(wave[B,T]) -> score[B] = logits[:,1] - logits[:,0] (cao = thật).
     """
-    mod_name, cls_name = model_cfg["class"].split(":")
+    target = model_cfg.get("class")
+    if not target:
+        from models import REGISTRY
+        if model_cfg.get("name") not in REGISTRY:
+            raise KeyError(f"model {model_cfg.get('name')!r} không có trong models.REGISTRY {sorted(REGISTRY)}")
+        target = REGISTRY[model_cfg["name"]]
+    mod_name, cls_name = target.split(":")
     cls = getattr(importlib.import_module(mod_name), cls_name)
     model = cls(**(model_cfg.get("args") or {}))
     if not callable(getattr(model, "logits", None)):
-        raise TypeError(f"{model_cfg['class']} thiếu logits(wave) -> [B,2] (cột 0 thật, 1 giả)")
+        raise TypeError(f"{target} thiếu logits(wave) -> [B,2] (cột 0 giả, 1 thật)")
     return model
 
 
