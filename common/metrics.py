@@ -2,10 +2,10 @@
 
 compute_det_curve / compute_eer: port NGUYÊN VĂN từ clovaai/aasist evaluation.py
 (https://github.com/clovaai/aasist, commit a04c986, MIT, Copyright (c) 2021-present NAVER Corp.).
-Hàm gốc coi "target" = bona fide và điểm CAO = bona fide.
 
-Quy ước chung của repo: điểm CAO = GIẢ. eer_from_labels() đổi dấu ĐÚNG MỘT CHỖ trước khi
-gọi hàm gốc. min t-DCF và chấm file điểm nằm trong eval/score.py (B phụ trách).
+Quy ước chung (chốt 26/11/2026) giống clovaai: nhãn 1 = thật, 0 = giả; điểm CAO = THẬT.
+Vì vậy KHÔNG đổi dấu: gọi thẳng compute_eer(bona_scores, spoof_scores).
+min t-DCF và chấm file điểm nằm trong eval/score.py (B phụ trách).
 """
 from __future__ import annotations
 
@@ -50,10 +50,10 @@ def compute_eer(target_scores, nontarget_scores):
 
 
 def eer_from_labels(scores, labels) -> tuple[float, float]:
-    """EER (%) theo quy ước chung: labels 0 = thật, 1 = giả; điểm cao = giả.
+    """EER (%) theo quy ước chung: labels 1 = thật, 0 = giả; điểm cao = thật.
 
-    Trả (eer_percent, threshold) với threshold theo dấu của `scores`
-    (điểm > threshold -> coi là giả, xấp xỉ tại điểm EER).
+    Trả (eer_percent, threshold) — threshold của compute_eer gốc
+    (điểm >= threshold -> coi là thật, xấp xỉ tại điểm EER).
     """
     scores = np.asarray(scores, dtype=np.float64).ravel()
     labels = np.asarray(labels).ravel()
@@ -61,9 +61,8 @@ def eer_from_labels(scores, labels) -> tuple[float, float]:
         raise ValueError(f"scores {scores.shape} != labels {labels.shape}")
     if not np.all(np.isfinite(scores)):
         raise ValueError("scores có NaN/inf")
-    bona, spoof = scores[labels == 0], scores[labels == 1]
+    bona, spoof = scores[labels == 1], scores[labels == 0]
     if bona.size == 0 or spoof.size == 0:
         raise ValueError("cần cả mẫu thật và mẫu giả để tính EER")
-    # Đổi dấu: hàm gốc cần điểm cao = bona fide.
-    eer, thr = compute_eer(-bona, -spoof)
-    return float(eer * 100.0), float(-thr)
+    eer, thr = compute_eer(bona, spoof)
+    return float(eer * 100.0), float(thr)

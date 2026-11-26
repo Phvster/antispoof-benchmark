@@ -22,8 +22,8 @@ python -m pytest -q
 |---|---|---|
 | `common/audio.py` | `load_audio()` (flac/wav hoặc .npy int16), `NB_SAMP`, `pad` / `pad_random` / `prepare(mode)` | A + B |
 | `common/data.py` | `read_protocol()`, `AntiSpoofDataset`, `worker_init_fn` | A + B |
-| `common/metrics.py` | EER (port clovaai/aasist), `eer_from_labels()` theo quy ước điểm cao = giả | A + B |
-| `common/train.py` | vòng train: weighted CE [0.9, 0.1], chọn theo dev EER, 100 epoch, patience 10, resume, `--max_minutes` | A + B |
+| `common/metrics.py` | EER (port clovaai/aasist), `eer_from_labels()` theo quy ước điểm cao = thật (không đổi dấu) | A + B |
+| `common/train.py` | vòng train: weighted CE [0.1, 0.9], chọn theo dev EER, 100 epoch, patience 10, resume, `--max_minutes` | A + B |
 | `common/score_export.py` | xuất `scores/<mode>/<model>_<train>_<test>_<aug>_seed<k>.txt` | A + B |
 | `protocols/convert_asvspoof2019_la.py` | protocol BTC 2019 LA -> CSV `file_id,speaker_id,label,attack_id,subset` + md5 | A + B |
 | `tools/decode_to_npy.py` | giải mã FLAC -> .npy int16 một lần (đọc nhanh hơn khi train) | A + B |
@@ -33,8 +33,8 @@ python -m pytest -q
 ## Giao diện model
 
 Mỗi model là một `nn.Module` có:
-- `logits(wave[B, T]) -> [B, 2]`: cột 0 = thật, cột 1 = giả (theo nhãn chung);
-- `forward(wave[B, T]) -> score[B] = logit_spoof - logit_bonafide` (cao = giả).
+- `logits(wave[B, T]) -> [B, 2]`: cột 0 = giả, cột 1 = thật (nhãn chung: 1 = thật, 0 = giả, giống clovaai);
+- `forward(wave[B, T]) -> score[B] = logits[:,1] - logits[:,0]` (cao = thật).
 
 Config model khai báo `model.class: "models.<tên>.model:<Class>"` và `model.args`.
 

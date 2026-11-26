@@ -38,8 +38,8 @@ def build_model(model_cfg: dict) -> torch.nn.Module:
     """model_cfg = {"name": ..., "class": "pkg.module:Class", "args": {...}}.
 
     Model phải có:
-      logits(wave[B,T]) -> [B,2], cột 0 = thật, cột 1 = giả (nhãn chung);
-      forward(wave[B,T]) -> score[B] = logit_spoof - logit_bonafide (cao = giả).
+      logits(wave[B,T]) -> [B,2], cột 0 = giả, cột 1 = thật (nhãn chung, giống clovaai);
+      forward(wave[B,T]) -> score[B] = logits[:,1] - logits[:,0] (cao = thật).
     """
     mod_name, cls_name = model_cfg["class"].split(":")
     cls = getattr(importlib.import_module(mod_name), cls_name)

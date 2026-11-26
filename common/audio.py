@@ -21,9 +21,7 @@ from scipy.signal import resample_poly
 
 SAMPLE_RATE = 16000
 
-# CHỜ CHỐT: tài liệu quy ước hiện vẫn ghi 64.000 mẫu (4 s); đề xuất sửa thành
-# 64.600 (= nb_samp của code AASIST) đang là suggestion chưa được cả hai duyệt.
-# Đổi giá trị này chỉ khi tài liệu đã chốt.
+# 64.600 mẫu (~4,04 s) = nb_samp của code AASIST — đã chốt trong tài liệu quy ước.
 NB_SAMP = 64600
 
 MODES = ("train", "window", "full")
@@ -72,7 +70,8 @@ def pad_random(x: np.ndarray, max_len: int = NB_SAMP,
     """Train: cắt ngẫu nhiên max_len mẫu; ngắn hơn thì lặp (tile) rồi cắt.
 
     Port từ clovaai `data_utils.pad_random`, khác hai điểm:
-    - dùng `rng` truyền vào (tái lập được theo seed) thay cho np.random toàn cục;
+    - dùng `rng` truyền vào thay cho np.random toàn cục (Dataset truyền
+      default_rng([seed, epoch, idx]) theo quy ước);
     - x_len == max_len: bản gốc gọi np.random.randint(0) và lỗi; ở đây trả nguyên x.
     """
     rng = rng if rng is not None else np.random.default_rng()

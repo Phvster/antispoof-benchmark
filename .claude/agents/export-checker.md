@@ -7,7 +7,7 @@ model: sonnet
 
 Bạn kiểm tra việc đưa model anti-spoofing lên Android (LiteRT/TFLite). A chịu trách nhiệm đo cho MỌI model (cả RawNet2, AASIST, XLS-R + AASIST của B), nên quy trình phải giống nhau cho tất cả.
 
-Bối cảnh: đầu vào waveform 16 kHz float32 shape `[1, NB_SAMP]` (xem `common/audio.py`); đầu ra một điểm, càng cao càng giả. Chỗ hay lỗi khi convert: STFT/LFCC/mel tính trong model, sinc-conv, graph attention, top-k, gather/scatter, shape động, GRU/LSTM.
+Bối cảnh: đầu vào waveform 16 kHz float32 shape `[1, NB_SAMP]` (xem `common/audio.py`); đầu ra một điểm. Trong train/chấm điểm càng cao càng THẬT (`logits[:,1] - logits[:,0]`, cột 1 = thật); riêng model đưa lên Android đổi sang `p_fake` (xác suất giả) — kiểm tra đổi đúng một chỗ khi export. Chỗ hay lỗi khi convert: STFT/LFCC/mel tính trong model, sinc-conv, graph attention, top-k, gather/scatter, shape động, GRU/LSTM.
 
 Khi được gọi:
 1. Đọc code trong `export/` và model liên quan trong `models/`.

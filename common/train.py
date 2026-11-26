@@ -1,7 +1,7 @@
 """Vòng train chung — DÙNG CHUNG cho mọi model (A và B).
 
 Quy ước cố định (CONVENTIONS.md, mục "Huấn luyện") — là hằng số ở đây, KHÔNG đặt trong config model:
-- Weighted CE [0.9, 0.1] theo nhãn (0 = thật, 1 = giả)  -> CLASS_WEIGHTS
+- Weighted CE [0.1, 0.9] theo nhãn (0 = giả, 1 = thật), giống clovaai -> CLASS_WEIGHTS
 - Chọn checkpoint theo dev EER (chế độ cửa sổ), tối đa 100 epoch, dừng sớm sau 10 epoch
   dev EER không giảm                                     -> MAX_EPOCHS, PATIENCE
 - Seed 0, 1, 2                                          -> SEEDS
@@ -38,7 +38,7 @@ from common.metrics import eer_from_labels
 from common.utils import (atomic_torch_save, build_model, count_params, env_info, load_yaml,
                           save_yaml, set_seed, write_json)
 
-CLASS_WEIGHTS = [0.9, 0.1]  # [thật, giả] — CHỜ tài liệu chấp nhận câu chữ, giá trị đã thống nhất
+CLASS_WEIGHTS = [0.1, 0.9]  # [giả (0), thật (1)] — đã chốt, giống clovaai/aasist main.py
 MAX_EPOCHS = 100
 PATIENCE = 10
 SEEDS = (0, 1, 2)
@@ -105,7 +105,8 @@ def train_one_epoch(model, loader, opt, sched, crit, device, limit_batches=None)
 
 @torch.no_grad()
 def predict(model, loader, device, limit_batches=None):
-    """Trả (file_ids, labels, scores, logits). score = logit_spoof - logit_bonafide."""
+    """Trả (file_ids, labels, scores, logits). score = logit[:,1] - logit[:,0]
+    = logit_thật - logit_giả (cao = thật)."""
     model.eval()
     fids, labels, logits = [], [], []
     for i, (x, y, fid) in enumerate(loader):

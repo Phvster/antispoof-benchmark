@@ -69,7 +69,7 @@ def test_train_resume_matches_continuous(setup, monkeypatch):
                  "run_status.json"):
         assert (b / name).exists(), name
     env = json.loads((b / "env.json").read_text(encoding="utf-8"))
-    assert env["CLASS_WEIGHTS"] == [0.9, 0.1] and env["batch_size"] == 4 and "torch" in env
+    assert env["CLASS_WEIGHTS"] == [0.1, 0.9] and env["batch_size"] == 4 and "torch" in env
 
 
 def test_early_stopping(setup, monkeypatch):
@@ -136,3 +136,19 @@ def test_resume_checkpoint_rng_restorable_from_cpu(setup, monkeypatch):
     assert torch.equal(g.get_state(), ck["rng"]["loader_gen"])
     src = open(train_mod.__file__, encoding="utf-8").read()
     assert 'torch.load(p("last.pt"), map_location="cpu"' in src
+
+
+def test_high_score_means_bonafide_end_to_end(setup):
+    """Toàn chuỗi protocol -> dataset -> score_export -> EER: file thật (nhãn 1) phải có điểm cao."""
+    cfg = setup["tmp"] / "oracle.yaml"
+    cfg.write_text(yaml.safe_dump({"model": {"name": "oracle", "class": "tests.dummy_model:OracleModel"}}))
+    eval_proto = str(setup["proto"] / "asvspoof2019_la_eval.csv")
+    path = export_main(["--config", str(cfg), "--pretrained", "none", "--protocol", eval_proto,
+                        "--audio_dir", setup["la"]["audio_dir"]["eval"], "--mode", "window",
+                        "--train_name", "x", "--test_name", "la19eval", "--aug", "A0",
+                        "--seed", "pretrained", "--out_dir", str(setup["tmp"] / "scores_oracle")])
+    scores = np.array([float(ln.split()[1]) for ln in open(path, encoding="utf-8")])
+    labels = read_protocol(eval_proto)["label"].values
+    assert scores[labels == 1].min() > scores[labels == 0].max()
+    eer, _ = eer_from_labels(scores, labels)
+    assert eer == 0.0

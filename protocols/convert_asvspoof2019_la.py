@@ -3,7 +3,7 @@
 Input (thư mục ASVspoof2019_LA_cm_protocols), mỗi dòng: `speaker file_id - attack key`
   vd: `LA_0079 LA_T_1138215 - - bonafide`, `LA_0039 LA_E_2834763 - A11 spoof`
 Output: <out_dir>/asvspoof2019_la_{train,dev,eval}.csv với cột
-  file_id,speaker_id,label,attack_id,subset   (label: bonafide -> 0, spoof -> 1)
+  file_id,speaker_id,label,attack_id,subset   (label: bonafide -> 1, spoof -> 0)
 
 Ví dụ:
   python -m protocols.convert_asvspoof2019_la \
@@ -22,7 +22,9 @@ SPLITS = {
     "dev": ("ASVspoof2019.LA.cm.dev.trl.txt", 24844),
     "eval": ("ASVspoof2019.LA.cm.eval.trl.txt", 71237),
 }
-LABEL_MAP = {"bonafide": 0, "spoof": 1}  # quy ước chung: 0 = thật, 1 = giả
+# Số file thật (nhãn 1) chính thức; kiểm tra để bắt lỗi đảo nhãn.
+EXPECTED_BONA = {"train": 2580, "dev": 2548, "eval": 7355}
+LABEL_MAP = {"bonafide": 1, "spoof": 0}  # quy ước chung (chốt 26/11): 1 = thật, 0 = giả
 
 
 def convert_file(src: str, dst: str, subset: str) -> list[dict]:
@@ -38,8 +40,8 @@ def convert_file(src: str, dst: str, subset: str) -> list[dict]:
             if key not in LABEL_MAP:
                 raise ValueError(f"{src}:{n}: key lạ {key!r}")
             label = LABEL_MAP[key]
-            if label == 0 and attack != "-":
-                raise ValueError(f"{src}:{n}: bonafide nhưng attack={attack}")
+            if label == 1 and attack != "-":
+                raise ValueError(f"{src}:{n}: nhãn 1 (thật) nhưng attack={attack} -> nghi đảo nhãn")
             rows.append({"file_id": fid, "speaker_id": spk, "label": label,
                          "attack_id": attack, "subset": subset})
     with open(dst, "w", encoding="utf-8", newline="") as f:
@@ -69,8 +71,11 @@ def main(argv=None) -> dict:
         ids[subset] = set(df["file_id"])
         spks[subset] = set(df["speaker_id"])
         md5[subset] = md5sum(dst)
-        n_bona = int((df["label"] == 0).sum())
-        print(f"{subset:5s} rows={len(df):6d} bona={n_bona:6d} spoof={len(df) - n_bona:6d} "
+        n_bona = int((df["label"] == 1).sum())
+        if not args.no_count_check and n_bona != EXPECTED_BONA[subset]:
+            raise ValueError(f"{subset}: {n_bona} nhãn 1 (thật), kỳ vọng {EXPECTED_BONA[subset]}"
+                             " -> nghi đảo nhãn")
+        print(f"{subset:5s} rows={len(df):6d} label1(thật)={n_bona:6d} label0(giả)={len(df) - n_bona:6d} "
               f"speakers={df['speaker_id'].nunique():4d} "
               f"attacks={sorted(set(df['attack_id']) - {'-'})}")
         print(f"      md5 src {md5sum(src)}  {src}")

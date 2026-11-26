@@ -2,15 +2,14 @@
 
 Định dạng protocol (CSV, có header):
     file_id,speaker_id,label,attack_id,subset
-- label: 0 = thật (bona fide), 1 = giả (spoof).
+- label: 1 = thật (bona fide), 0 = giả (spoof) — chốt 26/11/2026, giống clovaai/ASVspoof.
 - attack_id: A01..A19 (hoặc mã tấn công của bộ khác); file thật ghi "-".
 - subset: train | dev | eval.
 
-Tính ngẫu nhiên của cắt train (pad_random):
-- Mỗi worker có rng riêng = default_rng([seed, worker_id, epoch]), tạo trong worker_init_fn.
-- num_workers=0 dùng đúng rng của "worker 0" -> cùng seed/epoch thì cùng crop.
-- Gọi dataset.set_epoch(epoch) TRƯỚC khi tạo iterator mỗi epoch (không dùng
-  persistent_workers, để worker được tạo lại và nhận epoch mới).
+Tính ngẫu nhiên của cắt train (pad_random): mỗi MẪU dùng default_rng([seed, epoch, idx])
+(quy ước) -> đoạn cắt không phụ thuộc num_workers, máy chạy hay resume.
+Gọi dataset.set_epoch(epoch) TRƯỚC khi tạo iterator mỗi epoch (không dùng persistent_workers,
+để worker được tạo lại và nhận epoch mới).
 """
 from __future__ import annotations
 
@@ -26,6 +25,7 @@ from torch.utils.data import Dataset
 from common.audio import load_audio, prepare
 
 COLUMNS = ["file_id", "speaker_id", "label", "attack_id", "subset"]
+BONAFIDE, SPOOF = 1, 0
 
 
 def md5sum(path: str) -> str:
@@ -51,6 +51,11 @@ def read_protocol(path: str) -> pd.DataFrame:
     return df
 
 
+def sample_rng(seed: int, epoch: int, idx: int) -> np.random.Generator:
+    """rng của một mẫu train theo quy ước: default_rng([seed, epoch, idx])."""
+    return np.random.default_rng([seed, epoch, idx])
+
+
 class AntiSpoofDataset(Dataset):
     """Trả (wave: FloatTensor[T], label: int, file_id: str).
 
@@ -68,14 +73,9 @@ class AntiSpoofDataset(Dataset):
         self.epoch = 0
         self.file_ids = self.df["file_id"].tolist()
         self.labels = self.df["label"].astype(int).tolist()
-        self.init_rng(worker_id=0)
-
-    def init_rng(self, worker_id: int) -> None:
-        self.rng = np.random.default_rng([self.seed, worker_id, self.epoch])
 
     def set_epoch(self, epoch: int) -> None:
         self.epoch = epoch
-        self.init_rng(worker_id=0)  # cho num_workers=0; worker thật tự gọi lại init_rng
 
     def __len__(self) -> int:
         return len(self.file_ids)
@@ -83,19 +83,14 @@ class AntiSpoofDataset(Dataset):
     def __getitem__(self, i: int):
         fid = self.file_ids[i]
         x = load_audio(os.path.join(self.audio_dir, fid + self.ext))
-        x = prepare(x, self.mode, self.rng)
+        rng = sample_rng(self.seed, self.epoch, i) if self.mode == "train" else None
+        x = prepare(x, self.mode, rng)
         return torch.from_numpy(np.ascontiguousarray(x)), self.labels[i], fid
 
 
 def worker_init_fn(worker_id: int) -> None:
-    """rng riêng cho mỗi worker: default_rng([seed, worker_id, epoch]).
-
-    Seed thêm numpy/random toàn cục (phòng khi augment sau này dùng) từ torch.initial_seed().
-    """
-    info = torch.utils.data.get_worker_info()
+    """Seed numpy/random toàn cục trong worker (phòng khi augment sau này dùng).
+    Cắt train KHÔNG dùng rng toàn cục mà dùng sample_rng([seed, epoch, idx])."""
     s = torch.initial_seed() % 2**32
     np.random.seed(s)
     random.seed(s)
-    ds = info.dataset
-    if hasattr(ds, "init_rng"):
-        ds.init_rng(worker_id)

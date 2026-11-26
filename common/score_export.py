@@ -1,8 +1,8 @@
 """Xuất file điểm theo quy ước — DÙNG CHUNG (A và B).
 
 Tên file: <out_dir>/<mode>/<model>_<train>_<test>_<aug>_seed<k>.txt, mỗi dòng `file_id score`,
-điểm = logit_spoof - logit_bonafide (cao = giả), thứ tự dòng = thứ tự protocol.
-Thư mục con <mode> = window | full (ĐỀ XUẤT, chờ B đồng ý) vì tên file quy ước không có chế độ chấm.
+điểm = logit[:,1] - logit[:,0] = logit_thật - logit_giả (cao = thật), thứ tự dòng = thứ tự protocol.
+Thư mục con <mode> = window | full (đã chốt trong tài liệu).
 
 Ví dụ:
   python -m common.score_export --checkpoint runs/aasist_l_seed0/best.pt \

@@ -1,7 +1,8 @@
 # protocols/
 
 Protocol dùng chung, định dạng CSV có header: `file_id,speaker_id,label,attack_id,subset`
-(label 0 = thật, 1 = giả; attack `-` cho file thật).
+(label 1 = thật, 0 = giả — chốt 26/11/2026; attack `-` cho file thật).
+Script kiểm tra số nhãn 1 chính thức: train 2.580, dev 2.548, eval 7.355.
 
 Sinh bằng `python -m protocols.convert_asvspoof2019_la --src <ASVspoof2019_LA_cm_protocols> --out_dir protocols`.
 

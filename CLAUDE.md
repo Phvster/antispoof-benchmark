@@ -20,11 +20,11 @@
 - `common/data.py` — đọc protocol (`file_id, speaker_id, label, attack_id, subset`), Dataset train/dev/eval.
 - `common/train.py` — vòng train chung: weighted CE, chọn checkpoint theo dev EER, early stopping, resume, 3 seed.
 - `common/augment.py` — cấu hình A0 / A1 (RawBoost 3 + Opus 8–32 kbps + MUSAN SNR 5–20 dB).
-- `models/<tên>/model.py` + `models/<tên>/config.yaml` — mỗi model một thư mục, giao diện `forward(waveform) -> score` (điểm càng cao càng giả).
+- `models/<tên>/model.py` + `models/<tên>/config.yaml` — mỗi model một thư mục, giao diện `forward(waveform) -> score` (điểm càng cao càng THẬT; `logits` cột 0 = giả, 1 = thật).
   - Của tôi: `models/lfcc_lcnn/`, `models/liteantispoofnet/`, `models/aasist_l/`.
 - `common/metrics.py` — hàm EER chung (port clovaai/aasist; A viết, B review). `eval/score.py` — script chấm file điểm + min t-DCF (B phụ trách). **Không sửa logic tính EER/t-DCF.**
 - `protocols/` — file protocol dùng chung + md5.
-- `scores/` — file điểm `<model>_<train>_<test>_<aug>_seed<k>.txt`, mỗi dòng `file_id score`.
+- `scores/window/`, `scores/full/` — file điểm `<model>_<train>_<test>_<aug>_seed<k>.txt`, mỗi dòng `file_id score`.
 - `export/` — PyTorch → ONNX → TFLite (float32 + INT8 dynamic-range), test so khớp, script đo trên Android (tôi phụ trách).
 - `kaggle/` — notebook chạy train/eval.
 - `tests/` — smoke test.
@@ -45,4 +45,4 @@
 - `export-checker`: khi làm export ONNX/TFLite, INT8, hoặc đo độ trễ Android.
 
 ## Mốc kiểm chứng
-- AASIST-L pretrained (clovaai/aasist) trên ASVspoof 2019 LA eval, chấm **chế độ cửa sổ 64.600 mẫu đầu** (đúng cách clovaai chấm, `pad()` trong `data_utils.py`; không phải cả file): EER ≈ 0,99%, min t-DCF ≈ 0,0309, 85.306 tham số. Lệch xa → pipeline sai (thường do dấu điểm hoặc nhãn).
+- AASIST-L pretrained (clovaai/aasist) trên ASVspoof 2019 LA eval, chấm **chế độ cửa sổ 64.600 mẫu đầu** (đúng cách clovaai chấm, `pad()` trong `data_utils.py`; không phải cả file): EER ≈ 0,99%, min t-DCF ≈ 0,0309, 85.306 tham số. Lệch xa → pipeline sai (thường do dấu điểm hoặc nhãn). Quy ước nhãn chốt 26/11/2026: 1 = thật, 0 = giả, điểm cao = thật, CE `[0.1, 0.9]` — giống clovaai, không đổi dấu; chỉ đổi sang `p_fake` khi export Android.
