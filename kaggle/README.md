@@ -42,18 +42,27 @@ so lại một file mỗi tập.
 `TRIAL_RUN = True` đặt `--max_minutes 10` và `--stop_after_epochs 2`: mỗi phiên chạy tối đa 2 epoch rồi dừng ở trạng thái `paused`.
 Cờ này không đổi `MAX_EPOCHS`, nên lịch learning rate và kết quả giống hệt chạy liền.
 
+**Chép dữ liệu sang ổ local (`COPY_TO_LOCAL = True`, mặc định).** Lần chạy thử đầu đọc thẳng từ `/kaggle/input`
+(ổ mạng) chỉ được khoảng 28–30 file/s, nên mất 55 phút/epoch. Cell 1b chép `train/` và `dev/` (khoảng 50 nghìn file) sang
+`/tmp/la_npy` bằng 64 luồng, rồi in số file/s và dung lượng ổ. Dữ liệu giống hệt từng bit nên kết quả không đổi. Tập `eval/`
+chỉ được chép khi cần (chấm pretrained hoặc xuất điểm).
+
+**Chấm pretrained (`RUN_PRETRAINED_CHECK`) mặc định tắt**, vì đã kiểm chứng: EER = **0,992%** (commit `ca4c91d`).
+Bật lại khi đổi `load_audio`, `score_export`, `metrics` hoặc model.
+
 **Version 1** (Cell 0: `NPY_DATASET`, `PREV_RUN = None`):
-- Cell 2 chấm pretrained AASIST-L ở **chế độ cửa sổ**, ghi
+- Nếu bật `RUN_PRETRAINED_CHECK`: Cell 2 chấm pretrained AASIST-L ở **chế độ cửa sổ**, ghi
   `scores/window/aasist_l_la19_la19eval_A0_seedpretrained.txt`. Kỳ vọng EER ≈ 0,99%; nếu nằm ngoài khoảng [0,5; 1,5]% thì notebook dừng.
+- Cell 4 in tiến độ của từng seed mỗi 2 phút: số batch, mẫu/s, **% thời gian chờ dữ liệu**, thời gian còn lại.
 - Cell 4 train seed 0 và 1 song song (`CUDA_VISIBLE_DEVICES=0` và `1`) và ghi `last.pt`.
-- Cell 6 in số phút / epoch (gồm cả chấm dev 24.844 file) để tính quota.
+- Cell 6 in số phút / epoch, tách thành train và dev, kèm thời gian chờ dữ liệu của mỗi phần, để tính quota và biết còn nghẽn ở đâu.
 
 **Version 2**: Add Input → Your Work → output của version 1. Cell 0: `PREV_RUN = "/kaggle/input/<output v1>"`.
 - Cell 3 chép `runs/` và `scores/` của version 1. `--resume auto` nạp `last.pt` rồi chạy tiếp từ đúng epoch.
 - Kiểm tra: `log.csv` phải **liền mạch** (epoch 0, 1 từ v1, rồi 2, 3 từ v2, không trùng, không mất).
 
 Mang về các thứ sau rồi đưa cho `experiment-auditor`:
-- EER của pretrained;
+- tốc độ chép ở Cell 1b (file/s, thời gian chép);
 - `log.csv` + `run_status.json` + `env.json` của cả hai version;
 - số phút / epoch.
 
