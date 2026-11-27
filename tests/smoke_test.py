@@ -38,7 +38,10 @@ def setup(fake_la, tmp_path_factory):
     return {"tmp": tmp, "proto": proto, "cfg": str(cfg_path), "data": data_args, "la": fake_la}
 
 
-def read_log(path, drop=("epoch_sec",)):
+TIME_COLS = ("epoch_sec", "train_sec", "dev_sec", "train_data_wait_sec", "dev_data_wait_sec")
+
+
+def read_log(path, drop=TIME_COLS):
     with open(path, newline="") as f:
         return [{k: v for k, v in r.items() if k not in drop} for r in csv.DictReader(f)]
 
@@ -165,3 +168,15 @@ def test_stop_after_epochs_then_resume_matches(setup, monkeypatch):
     st2 = run(setup, b, "--stop_after_epochs", "1")
     assert st2["state"] == "finished" and st2["last_epoch"] == 1
     assert read_log(a / "log.csv") == read_log(b / "log.csv")
+
+
+def test_log_has_timing_columns(setup, monkeypatch):
+    """log.csv tách thời gian train / dev / chờ dữ liệu để tìm nút thắt."""
+    monkeypatch.setattr(train_mod, "MAX_EPOCHS", 1)
+    out = setup["tmp"] / "run_timing"
+    run(setup, out)
+    row = read_log(out / "log.csv", drop=())[0]
+    for c in TIME_COLS:
+        assert float(row[c]) >= 0.0, c
+    assert float(row["train_sec"]) + float(row["dev_sec"]) <= float(row["epoch_sec"]) + 1.0
+    assert float(row["train_data_wait_sec"]) <= float(row["train_sec"]) + 1e-6

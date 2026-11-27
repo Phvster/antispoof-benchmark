@@ -46,6 +46,7 @@ PATIENCE = 10
 SEEDS = (0, 1, 2)
 
 LOG_FIELDS = ["epoch", "train_loss", "dev_loss", "dev_eer", "lr", "epoch_sec",
+              "train_sec", "dev_sec", "train_data_wait_sec", "dev_data_wait_sec",
               "best_dev_eer", "is_best", "bad_epochs"]
 DATA_KEYS = ["train_protocol", "train_audio_dir", "dev_protocol", "dev_audio_dir", "ext"]
 
@@ -86,12 +87,45 @@ def make_criterion(device) -> nn.Module:
     return nn.CrossEntropyLoss(weight=torch.tensor(CLASS_WEIGHTS, dtype=torch.float32, device=device))
 
 
-def train_one_epoch(model, loader, opt, sched, crit, device, limit_batches=None) -> float:
+class Progress:
+    """Đo thời gian chờ dữ liệu (DataLoader) và in tiến độ định kỳ (mỗi `every` giây)."""
+
+    def __init__(self, tag: str, total: int, every: float = 120.0):
+        self.tag, self.total, self.every = tag, total, every
+        self.t0 = self.last_print = self.t_prev = time.time()
+        self.wait = 0.0
+        self.n_batches = self.n_samples = 0
+
+    def got_batch(self) -> None:  # gọi ngay khi DataLoader trả batch
+        now = time.time()
+        self.wait += now - self.t_prev
+
+    def done_batch(self, bs: int) -> None:  # gọi sau khi xử lý xong batch (đã đồng bộ GPU)
+        self.n_batches += 1
+        self.n_samples += bs
+        now = self.t_prev = time.time()
+        if now - self.last_print >= self.every:
+            self.last_print = now
+            el = now - self.t0
+            eta = el / self.n_batches * (self.total - self.n_batches)
+            print(f"[{self.tag}] {self.n_batches}/{self.total} batch, {self.n_samples / el:.1f} mẫu/s, "
+                  f"chờ dữ liệu {100 * self.wait / el:.0f}%, còn ~{eta / 60:.1f} phút", flush=True)
+
+    def stats(self) -> dict:
+        return {"sec": time.time() - self.t0, "data_wait_sec": self.wait,
+                "samples": self.n_samples, "batches": self.n_batches}
+
+
+def train_one_epoch(model, loader, opt, sched, crit, device, limit_batches=None,
+                    stats: dict | None = None, tag: str = "train") -> float:
     model.train()
     total, n = 0.0, 0
+    n_total = len(loader) if limit_batches is None else min(limit_batches, len(loader))
+    prog = Progress(tag, n_total)
     for i, (x, y, _) in enumerate(loader):
         if limit_batches is not None and i >= limit_batches:
             break
+        prog.got_batch()
         x = x.to(device, non_blocking=True)
         y = y.view(-1).long().to(device, non_blocking=True)
         loss = crit(model.logits(x), y)
@@ -100,24 +134,34 @@ def train_one_epoch(model, loader, opt, sched, crit, device, limit_batches=None)
         opt.step()
         if sched is not None:
             sched.step()
-        total += loss.item() * x.size(0)
+        total += loss.item() * x.size(0)  # .item() đồng bộ GPU -> thời gian đo được là thật
         n += x.size(0)
+        prog.done_batch(x.size(0))
+    if stats is not None:
+        stats.update(prog.stats())
     return total / max(n, 1)
 
 
 @torch.no_grad()
-def predict(model, loader, device, limit_batches=None):
+def predict(model, loader, device, limit_batches=None, stats: dict | None = None,
+            tag: str = "predict"):
     """Trả (file_ids, labels, scores, logits). score = logit[:,1] - logit[:,0]
     = logit_thật - logit_giả (cao = thật)."""
     model.eval()
     fids, labels, logits = [], [], []
+    n_total = len(loader) if limit_batches is None else min(limit_batches, len(loader))
+    prog = Progress(tag, n_total)
     for i, (x, y, fid) in enumerate(loader):
         if limit_batches is not None and i >= limit_batches:
             break
-        lg = model.logits(x.to(device, non_blocking=True)).float().cpu()
+        prog.got_batch()
+        lg = model.logits(x.to(device, non_blocking=True)).float().cpu()  # .cpu() đồng bộ GPU
         logits.append(lg)
         labels.extend(int(v) for v in y)
         fids.extend(fid)
+        prog.done_batch(len(fid))
+    if stats is not None:
+        stats.update(prog.stats())
     logits = torch.cat(logits) if logits else torch.zeros(0, 2)
     scores = (logits[:, 1] - logits[:, 0]).numpy()
     return fids, np.asarray(labels), scores, logits.numpy()
@@ -274,8 +318,11 @@ def main(argv=None) -> dict:
         t0 = time.time()
         train_ds.set_epoch(epoch)
         lr = opt.param_groups[0]["lr"]
-        tr_loss = train_one_epoch(model, train_loader, opt, sched, crit, device, limit)
-        fids, labels, scores, logits = predict(model, dev_loader, device, limit)
+        tr_st, dev_st = {}, {}
+        tr_loss = train_one_epoch(model, train_loader, opt, sched, crit, device, limit,
+                                  stats=tr_st, tag=f"train e{epoch}")
+        fids, labels, scores, logits = predict(model, dev_loader, device, limit,
+                                               stats=dev_st, tag=f"dev e{epoch}")
         dev_loss = float(crit(torch.from_numpy(logits).to(device),
                               torch.from_numpy(labels).long().to(device)).item())
         dev_eer, _ = eer_from_labels(scores, labels)
@@ -291,6 +338,9 @@ def main(argv=None) -> dict:
         train_time += dt
         history.append({"epoch": epoch, "train_loss": f"{tr_loss:.6f}", "dev_loss": f"{dev_loss:.6f}",
                         "dev_eer": f"{dev_eer:.4f}", "lr": f"{lr:.3e}", "epoch_sec": f"{dt:.1f}",
+                        "train_sec": f"{tr_st['sec']:.1f}", "dev_sec": f"{dev_st['sec']:.1f}",
+                        "train_data_wait_sec": f"{tr_st['data_wait_sec']:.1f}",
+                        "dev_data_wait_sec": f"{dev_st['data_wait_sec']:.1f}",
                         "best_dev_eer": f"{best_eer:.4f}", "is_best": int(is_best),
                         "bad_epochs": bad_epochs})
         atomic_torch_save({"model": model.state_dict(), "optimizer": opt.state_dict(),
@@ -301,7 +351,9 @@ def main(argv=None) -> dict:
                            "seed": args.seed, "config": cfg}, p("last.pt"))
         write_log(history, p("log.csv"))
         print(f"epoch {epoch:3d} loss {tr_loss:.4f} dev_loss {dev_loss:.4f} dev_EER {dev_eer:.3f}% "
-              f"best {best_eer:.3f}%@{best_epoch} bad {bad_epochs} ({dt:.0f}s)")
+              f"best {best_eer:.3f}%@{best_epoch} bad {bad_epochs} ({dt:.0f}s: train {tr_st['sec']:.0f}s "
+              f"[chờ dữ liệu {tr_st['data_wait_sec']:.0f}s], dev {dev_st['sec']:.0f}s "
+              f"[chờ dữ liệu {dev_st['data_wait_sec']:.0f}s])", flush=True)
         if bad_epochs >= PATIENCE:
             print(f"[early stop] {PATIENCE} epoch dev EER không giảm.")
             return status("early_stopped", epoch)
